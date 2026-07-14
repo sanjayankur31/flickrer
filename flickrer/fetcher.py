@@ -123,22 +123,33 @@ def _fetch_exif_for(photos: list) -> None:
 
 
 def _save_photo(conn, photo) -> None:
-    _d = photo.__dict__
+    # FlickrObject.__getattr__ has a lazy-load "convenience": accessing
+    # any attribute not yet in __dict__ calls photo.load() = getInfo() =
+    # 1 API call. In a batch loop this silently triggers 1 extra API
+    # call per photo. Mark loaded=True to disable this behavior --
+    # all list-response data is already in __dict__ from the Walker.
+    photo.__dict__["loaded"] = True
 
     upsert_photo(
         conn,
         photo_id=photo.id,
-        title=_d.get("title"),
-        posted=_int_or_none(_d.get("dateupload")),
-        taken=_d.get("datetaken"),
-        width=_int_or_none(_d.get("width_o") or _d.get("width_l") or _d.get("o_width")),
-        height=_int_or_none(
-            _d.get("height_o") or _d.get("height_l") or _d.get("o_height")
+        title=getattr(photo, "title", None),
+        posted=_int_or_none(getattr(photo, "dateupload", None)),
+        taken=getattr(photo, "datetaken", None),
+        width=_int_or_none(
+            getattr(photo, "width_o", None)
+            or getattr(photo, "width_l", None)
+            or getattr(photo, "o_width", None)
         ),
-        media=_d.get("media"),
-        url_original=_d.get("url_o"),
-        url_large=_d.get("url_l"),
-        lastupdate=_int_or_none(_d.get("lastupdate")),
+        height=_int_or_none(
+            getattr(photo, "height_o", None)
+            or getattr(photo, "height_l", None)
+            or getattr(photo, "o_height", None)
+        ),
+        media=getattr(photo, "media", None),
+        url_original=getattr(photo, "url_o", None),
+        url_large=getattr(photo, "url_l", None),
+        lastupdate=_int_or_none(getattr(photo, "lastupdate", None)),
     )
 
 
