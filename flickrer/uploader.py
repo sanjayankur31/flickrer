@@ -33,8 +33,6 @@ _IMAGE_EXTENSIONS = frozenset(
     }
 )
 
-_UPLOAD_DELAY = 1.0
-
 _DATE_PATTERNS = [
     re.compile(r"(\d{4})[-_]?(\d{2})[-_]?(\d{2})[-_]?(\d{2})[-_]?(\d{2})[-_]?(\d{2})"),
     re.compile(r"(\d{2})(\d{2})(\d{2})[-_]?(\d{2})[-_]?(\d{2})[-_]?(\d{2})"),
@@ -153,12 +151,12 @@ def _do_uploads(conn, paths, uploaded_ids, failed, interrupted, start_time):
                 record_upload(conn, str(path), photo.id, path.stat().st_mtime)
                 conn.commit()
                 progress.update(task, advance=1)
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
                 log.warning("Failed to upload %s: %s", path.name, e)
                 failed.append(str(path))
                 progress.update(task, advance=1)
-
-            time.sleep(_UPLOAD_DELAY)
 
 
 def _do_updates(conn, paths, updated_ids, interrupted):
@@ -199,8 +197,6 @@ def _do_updates(conn, paths, updated_ids, interrupted):
             except Exception as e:
                 log.warning("Failed to update date for %s: %s", path.name, e)
                 progress.update(task, advance=1)
-
-            time.sleep(_UPLOAD_DELAY)
 
 
 def _guess_taken(path: Path) -> str | None:
