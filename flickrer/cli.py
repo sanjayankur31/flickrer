@@ -5,6 +5,7 @@ import typer
 from flickrer import auth as auth_mod
 from flickrer import analyzer, fetcher, reviewer, uploader
 from flickrer.db import count_flags, count_photos, get_conn, init_db
+from flickrer.utils import parse_timestamp
 
 app = typer.Typer(
     name="flickrer",
@@ -51,16 +52,17 @@ def fetch(
         "-n",
         help="Stop after fetching N photos (for testing)",
     ),
-    after: int | None = typer.Option(
+    after: str | None = typer.Option(
         None,
         "--after",
-        help="Only photos uploaded after this Unix timestamp "
-        "(e.g. 1700000000 for Nov 14 2023; use `date +%s` to get now)",
+        help="Only photos uploaded after this date. Accepts dateutil-"
+        "parsable formats (e.g. '2025-01-15', 'Jan 15 2025', "
+        "'2025-01-15 14:30:00') or a Unix timestamp (e.g. 1736899200)",
     ),
-    before: int | None = typer.Option(
+    before: str | None = typer.Option(
         None,
         "--before",
-        help="Only photos uploaded before this Unix timestamp",
+        help="Only photos uploaded before this date. Same formats as --after.",
     ),
     exif: bool = typer.Option(
         False,
@@ -91,8 +93,10 @@ def fetch(
         elif refresh_exif:
             fetcher.refresh_exif()
         else:
+            after_ts = parse_timestamp(after) if after else None
+            before_ts = parse_timestamp(before) if before else None
             fetcher.fetch_photostream(
-                username=user, limit=limit, after=after, before=before
+                username=user, limit=limit, after=after_ts, before=before_ts
             )
     except Exception as e:
         _log.error("Fetch failed: %s", e)
