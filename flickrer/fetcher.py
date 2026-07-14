@@ -17,10 +17,9 @@ def fetch_photostream(
     init_db()
     user = flickr_api.Person.findByUserName(username)
 
-    extras = "url_o,url_l,o_dims"
+    extras = "url_o,url_l,o_dims,date_upload,date_taken"
     total = 0
     exif_total = 0
-    errors = 0
 
     kwargs: dict = dict(per_page=500, extras=extras)
     if after is not None:
@@ -37,13 +36,6 @@ def fetch_photostream(
         for photo in walker:
             photo_id = photo.id
 
-            try:
-                photo.getInfo()
-            except Exception:
-                log.warning("getInfo failed for %s, skipping", photo_id)
-                errors += 1
-                continue
-
             sizes = getattr(photo, "sizes", {}) or {}
             original = sizes.get("Original", {})
             large = sizes.get("Large", {}) or sizes.get("Medium 800", {})
@@ -53,8 +45,8 @@ def fetch_photostream(
             url_original = original.get("source") or getattr(photo, "url_o", None)
             url_large = large.get("source") or getattr(photo, "url_l", None)
             media = getattr(photo, "media", None)
-            posted = getattr(photo, "posted", None)
-            taken = getattr(photo, "taken", None)
+            posted = _int_or_none(getattr(photo, "dateupload", None))
+            taken = getattr(photo, "datetaken", None)
             title = getattr(photo, "title", None)
 
             upsert_photo(
@@ -89,10 +81,9 @@ def fetch_photostream(
         conn.close()
 
     log.info(
-        "Done. Fetched %d photos, %d EXIF entries, %d errors",
+        "Done. Fetched %d photos, %d EXIF entries",
         total,
         exif_total,
-        errors,
     )
 
 
