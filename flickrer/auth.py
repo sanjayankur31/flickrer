@@ -47,7 +47,7 @@ def authenticate(api_key: str | None = None, api_secret: str | None = None) -> N
     flickr_api.set_keys(api_key=api_key, api_secret=api_secret)
     save_creds(api_key, api_secret)
 
-    handler = flickr_api.auth.AuthHandler()
+    handler = flickr_api.auth.AuthHandler(callback="oob")
     url = handler.get_authorization_url("delete")
     log.info("Visit this URL to authorize:\n%s", url)
     verifier = input("Paste the verifier code: ").strip()
