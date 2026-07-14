@@ -8,7 +8,11 @@ from flickrer.db import get_conn, upsert_exif, upsert_photo, init_db
 log = logging.getLogger(__name__)
 
 
-def fetch_photostream(username: str) -> None:
+def fetch_photostream(
+    username: str,
+    limit: int | None = None,
+    after: int | None = None,
+) -> None:
     init_db()
     user = flickr_api.Person.findByUserName(username)
 
@@ -17,9 +21,17 @@ def fetch_photostream(username: str) -> None:
     exif_total = 0
     errors = 0
 
+    kwargs: dict = dict(per_page=500, extras=extras)
+    if after is not None:
+        kwargs["min_upload_date"] = after
+
+    walker = Walker(user.getPhotos, **kwargs)
+    if limit is not None:
+        walker = walker[:limit]
+
     conn = get_conn()
     try:
-        for photo in Walker(user.getPhotos, per_page=500, extras=extras):
+        for photo in walker:
             photo_id = photo.id
 
             try:
