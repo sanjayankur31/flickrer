@@ -145,11 +145,19 @@ def add_flag(
     )
 
 
-def iter_flags(conn: sqlite3.Connection) -> Generator[sqlite3.Row, None, None]:
-    yield from conn.execute(
+def iter_flags(
+    conn: sqlite3.Connection, exclude_reviewed: bool = True
+) -> Generator[sqlite3.Row, None, None]:
+    query = (
         "SELECT f.*, p.title, p.taken, p.posted, p.width, p.height, p.url_original, p.url_large "
-        "FROM flags f JOIN photos p ON p.id = f.photo_id ORDER BY f.flag_type, f.created_at"
+        "FROM flags f JOIN photos p ON p.id = f.photo_id "
     )
+    if exclude_reviewed:
+        query += (
+            "LEFT JOIN review r ON r.photo_id = f.photo_id WHERE r.photo_id IS NULL "
+        )
+    query += "ORDER BY f.flag_type, f.created_at"
+    yield from conn.execute(query)
 
 
 def count_flags(conn: sqlite3.Connection) -> dict[str, int]:
