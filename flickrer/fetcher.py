@@ -78,6 +78,7 @@ def fetch_photostream(
 
         conn.commit()
     finally:
+        conn.commit()
         conn.close()
 
     log.info(

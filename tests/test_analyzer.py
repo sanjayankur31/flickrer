@@ -1,5 +1,5 @@
 from flickrer.analyzer import _duplicate_reason, _find_no_exif
-from flickrer.db import add_flag, upsert_exif, upsert_photo
+from flickrer.db import upsert_exif, upsert_photo
 
 
 def _photo(

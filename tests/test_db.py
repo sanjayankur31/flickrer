@@ -4,8 +4,10 @@ from flickrer.db import (
     count_flags,
     count_photos,
     get_photo,
+    is_uploaded,
     iter_flags,
     photo_has_camera_exif,
+    record_upload,
     set_content_length,
     upsert_exif,
     upsert_photo,
@@ -17,7 +19,7 @@ def test_init_creates_tables(conn):
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
     ).fetchall()
     names = [r["name"] for r in tables]
-    assert names == ["exif", "flags", "photos", "review"]
+    assert names == ["exif", "flags", "photos", "review", "uploads"]
 
 
 def test_upsert_photo_insert(conn):
@@ -141,3 +143,26 @@ def test_count_flags(conn):
     counts = count_flags(conn)
     assert counts["duplicate"] == 2
     assert counts["no_exif"] == 1
+
+
+def test_record_upload_insert(conn):
+    record_upload(conn, "/path/a.jpg", "p1", 1000.0)
+    row = conn.execute(
+        "SELECT * FROM uploads WHERE local_path = ?", ("/path/a.jpg",)
+    ).fetchone()
+    assert row["photo_id"] == "p1"
+    assert row["mtime"] == 1000.0
+
+
+def test_is_uploaded_matches_mtime(conn):
+    record_upload(conn, "/path/a.jpg", "p1", 1000.0)
+    assert is_uploaded(conn, "/path/a.jpg", 1000.0) is True
+    assert is_uploaded(conn, "/path/a.jpg", 2000.0) is False
+    assert is_uploaded(conn, "/path/other.jpg", 1000.0) is False
+
+
+def test_record_upload_replaces_mtime(conn):
+    record_upload(conn, "/path/a.jpg", "p1", 1000.0)
+    record_upload(conn, "/path/a.jpg", "p1", 2000.0)
+    assert is_uploaded(conn, "/path/a.jpg", 2000.0) is True
+    assert is_uploaded(conn, "/path/a.jpg", 1000.0) is False

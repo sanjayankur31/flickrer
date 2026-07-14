@@ -39,6 +39,13 @@ CREATE TABLE IF NOT EXISTS review (
     decision   TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS uploads (
+    local_path  TEXT PRIMARY KEY,
+    photo_id    TEXT NOT NULL,
+    mtime       REAL NOT NULL,
+    uploaded_at INTEGER NOT NULL
+);
 """
 
 
@@ -181,3 +188,23 @@ def get_review(conn: sqlite3.Connection, photo_id: str) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM review WHERE photo_id = ?", (photo_id,)
     ).fetchone()
+
+
+# --- uploads ---
+
+
+def record_upload(
+    conn: sqlite3.Connection, local_path: str, photo_id: str, mtime: float
+) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO uploads (local_path, photo_id, mtime, uploaded_at) VALUES (?, ?, ?, ?)",
+        (local_path, photo_id, mtime, int(time.time())),
+    )
+
+
+def is_uploaded(conn: sqlite3.Connection, local_path: str, mtime: float) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM uploads WHERE local_path = ? AND mtime = ?",
+        (local_path, mtime),
+    ).fetchone()
+    return row is not None

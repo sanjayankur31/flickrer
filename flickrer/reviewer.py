@@ -86,10 +86,12 @@ def _prompt(row, conn, dry_run: bool) -> bool:
             else:
                 _delete_photo(row)
             add_review(conn, row["photo_id"], "delete")
+            conn.commit()
             return True
 
         if key == "s":
             add_review(conn, row["photo_id"], "skip")
+            conn.commit()
             return True
 
         if key == "q":
