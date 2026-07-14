@@ -8,8 +8,8 @@ from flickrer.db import count_flags, count_photos, get_conn, init_db
 
 app = typer.Typer(
     name="flickrer",
-    help="Clean up your Flickr photostream -- find duplicates, memes, and "
-    "non-camera uploads.",
+    help="Manage your Flickr photostream -- auth, fetch metadata, "
+    "find duplicates and memes, review and delete, upload photos.",
     no_args_is_help=True,
 )
 
@@ -128,7 +128,7 @@ def upload(
     user: str = typer.Option(
         ...,
         "--user",
-        help="Flickr username (for metadata refresh after upload)",
+        help="Flickr username (required for metadata refresh after upload)",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -136,11 +136,15 @@ def upload(
         help="Simulate upload without sending to Flickr",
     ),
 ) -> None:
-    """Upload image files to Flickr (private by default).
+    """Upload image files to your Flickr account (private only).
 
     Walks the given directory recursively for image files
     (.jpg, .png, .gif, .webp, .heic, etc.) and uploads them
-    to your Flickr account as private photos.
+    as private photos. Already-uploaded files (same path +
+    modification time) are skipped automatically -- duplicates
+    are not permitted.
+
+    Metadata is batch-refetched after all uploads complete.
     """
     _check_auth()
     init_db()
