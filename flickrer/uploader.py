@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 
 import flickr_api
@@ -33,7 +34,9 @@ _IMAGE_EXTENSIONS = frozenset(
 _UPLOAD_DELAY = 1.0
 
 
-def upload(directory: str, user: str, dry_run: bool = False) -> None:
+def upload(
+    directory: str, user: str, dry_run: bool = False, date_from_mtime: bool = False
+) -> None:
     all_files = sorted(_walk_images(Path(directory)))
     if not all_files:
         log.warning("No image files found in %s", directory)
@@ -81,12 +84,18 @@ def upload(directory: str, user: str, dry_run: bool = False) -> None:
             for path in to_upload:
                 progress.update(task, description=f"Uploading {path.name}")
 
+                kwargs = dict(
+                    photo_file=str(path),
+                    title=path.stem,
+                    is_public=0,
+                )
+                if date_from_mtime:
+                    kwargs["date_taken"] = datetime.fromtimestamp(
+                        path.stat().st_mtime
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
                 try:
-                    photo = flickr_api.upload(
-                        photo_file=str(path),
-                        title=path.stem,
-                        is_public=0,
-                    )
+                    photo = flickr_api.upload(**kwargs)
                     uploaded_ids.append(photo.id)
                     record_upload(conn, str(path), photo.id, path.stat().st_mtime)
                     conn.commit()

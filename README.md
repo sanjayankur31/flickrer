@@ -5,7 +5,7 @@ duplicates and memes, review and delete photos, and upload new ones.
 
 ## Installation
 
-Requires Python 3.12+.
+Requires Python 3.12+. Untested on non-Linux systems.
 
 ```bash
 git clone <repo> && cd flickrer
@@ -71,6 +71,9 @@ flickrer upload --user sanjay_ankur ./photos
 Walks the directory recursively, uploads image files as private photos.
 Already-uploaded files (same path + modification time) are skipped.
 Metadata is batch-refetched after all uploads complete.
+
+Use `--date-from-mtime` to set the photo's taken date from the file's
+modification time (useful for screenshots and downloads without EXIF).
 
 ## Development
 

@@ -135,6 +135,12 @@ def upload(
         "--dry-run",
         help="Simulate upload without sending to Flickr",
     ),
+    date_from_mtime: bool = typer.Option(
+        False,
+        "--date-from-mtime",
+        help="Use file modification time as the photo's taken date "
+        "(useful for photos without EXIF like screenshots and memes)",
+    ),
 ) -> None:
     """Upload image files to your Flickr account (private only).
 
@@ -149,7 +155,12 @@ def upload(
     _check_auth()
     init_db()
     try:
-        uploader.upload(directory=directory, user=user, dry_run=dry_run)
+        uploader.upload(
+            directory=directory,
+            user=user,
+            dry_run=dry_run,
+            date_from_mtime=date_from_mtime,
+        )
     except Exception as e:
         _log.error("Upload failed: %s", e)
         raise typer.Exit(code=1) from e
