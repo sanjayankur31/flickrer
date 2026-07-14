@@ -6,15 +6,16 @@ from flickrer.config import DB_PATH
 
 _CREATE_TABLES = """
 CREATE TABLE IF NOT EXISTS photos (
-    id            TEXT PRIMARY KEY,
-    title         TEXT,
-    posted        INTEGER,
-    taken         TEXT,
-    width         INTEGER,
-    height        INTEGER,
-    media         TEXT,
-    url_original  TEXT,
-    url_large     TEXT
+    id             TEXT PRIMARY KEY,
+    title          TEXT,
+    posted         INTEGER,
+    taken          TEXT,
+    width          INTEGER,
+    height         INTEGER,
+    content_length INTEGER,
+    media          TEXT,
+    url_original   TEXT,
+    url_large      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS exif (
@@ -87,6 +88,10 @@ def upsert_photo(
 
 def get_photo(conn: sqlite3.Connection, photo_id: str) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
+
+
+def set_content_length(conn: sqlite3.Connection, photo_id: str, size: int) -> None:
+    conn.execute("UPDATE photos SET content_length = ? WHERE id = ?", (size, photo_id))
 
 
 def iter_photos(conn: sqlite3.Connection) -> Generator[sqlite3.Row, None, None]:
