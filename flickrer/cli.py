@@ -67,21 +67,27 @@ def fetch(
     exif: bool = typer.Option(
         False,
         "--exif",
-        help="Fetch EXIF data for photos in the DB that are missing it "
-        "(skip the photo list walk, resumes from where you left off)",
+        help="Fetch EXIF data for photos missing it, then re-run "
+        "analyze (resumes from where you left off)",
     ),
     refresh_exif: bool = typer.Option(
         False,
         "--refresh-exif",
-        help="Re-fetch EXIF for ALL photos, even if already present "
-        "(useful if metadata was updated on Flickr)",
+        help="Re-fetch EXIF for photos with outdated metadata, "
+        "then re-run analyze (handy after editing on Flickr)",
     ),
 ) -> None:
     """Fetch photostream metadata into local SQLite database.
 
-    Without flags: fetches photo list only (fast). Use --exif to
-    fill in EXIF data for photos missing it, or --refresh-exif to
-    force a full re-fetch of all EXIF data.
+    Without flags: fetches photo list only (fast).
+
+    Use --exif to fill in EXIF data for photos missing it (resumes
+    where you left off). Automatically re-runs analyze afterwards
+    so duplicate/meme flags stay current.
+
+    Use --refresh-exif to re-fetch EXIF only for photos whose
+    lastupdate timestamp is newer than our last fetch (handy if you
+    edited metadata on Flickr's website). Also re-runs analyze.
 
     Requires an authenticated session (run 'flickrer auth' first).
     """
@@ -90,8 +96,10 @@ def fetch(
     try:
         if exif:
             fetcher.fetch_exif_missing()
+            analyzer.analyze()
         elif refresh_exif:
             fetcher.refresh_exif()
+            analyzer.analyze()
         else:
             after_ts = parse_timestamp(after) if after else None
             before_ts = parse_timestamp(before) if before else None
