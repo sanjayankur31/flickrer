@@ -12,6 +12,7 @@ dependencies = [
     "typer>=0.15",
     "rich>=13",
     "platformdirs>=4",
+    "exifread>=3.0",
 ]
 
 [project.optional-dependencies]

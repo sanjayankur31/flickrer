@@ -72,8 +72,10 @@ Walks the directory recursively, uploads image files as private photos.
 Already-uploaded files (same path + modification time) are skipped.
 Metadata is batch-refetched after all uploads complete.
 
-Use `--date-from-mtime` to set the photo's taken date from the file's
-modification time (useful for screenshots and downloads without EXIF).
+Each photo's taken date is determined automatically: reads EXIF
+DateTimeOriginal from the file, then tries to parse the filename
+(e.g. `IMG_20240315_143022`), and falls back to file modification
+time as a last resort.
 
 ## Development
 

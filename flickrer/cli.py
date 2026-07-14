@@ -135,32 +135,25 @@ def upload(
         "--dry-run",
         help="Simulate upload without sending to Flickr",
     ),
-    date_from_mtime: bool = typer.Option(
-        False,
-        "--date-from-mtime",
-        help="Use file modification time as the photo's taken date "
-        "(useful for photos without EXIF like screenshots and memes)",
-    ),
 ) -> None:
     """Upload image files to your Flickr account (private only).
 
-    Walks the given directory recursively for image files
-    (.jpg, .png, .gif, .webp, .heic, etc.) and uploads them
-    as private photos. Already-uploaded files (same path +
-    modification time) are skipped automatically -- duplicates
-    are not permitted.
+    Automatically determines each photo's taken date: uses EXIF
+    DateTimeOriginal if available, otherwise tries to parse the
+    filename (e.g. YYYYMMDD_HHMMSS), and falls back to file
+    modification time.
+
+    For already-uploaded files (same path + modification time),
+    instead of re-uploading, the taken date is corrected on Flickr
+    via the API. This allows fixing dates from previous web uploads
+    without re-uploading the actual file.
 
     Metadata is batch-refetched after all uploads complete.
     """
     _check_auth()
     init_db()
     try:
-        uploader.upload(
-            directory=directory,
-            user=user,
-            dry_run=dry_run,
-            date_from_mtime=date_from_mtime,
-        )
+        uploader.upload(directory=directory, user=user, dry_run=dry_run)
     except Exception as e:
         _log.error("Upload failed: %s", e)
         raise typer.Exit(code=1) from e
