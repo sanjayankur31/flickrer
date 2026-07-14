@@ -3,7 +3,7 @@ import logging
 import typer
 
 from flickrer import auth as auth_mod
-from flickrer import analyzer, fetcher, reviewer
+from flickrer import analyzer, fetcher, reviewer, uploader
 from flickrer.db import count_flags, count_photos, get_conn, init_db
 
 app = typer.Typer(
@@ -116,6 +116,38 @@ def review(
         reviewer.review(dry_run=dry_run)
     except Exception as e:
         _log.error("Review failed: %s", e)
+        raise typer.Exit(code=1) from e
+
+
+@app.command()
+def upload(
+    directory: str = typer.Argument(
+        ...,
+        help="Directory of image files to upload",
+    ),
+    user: str = typer.Option(
+        ...,
+        "--user",
+        help="Flickr username (for metadata refresh after upload)",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Simulate upload without sending to Flickr",
+    ),
+) -> None:
+    """Upload image files to Flickr (private by default).
+
+    Walks the given directory recursively for image files
+    (.jpg, .png, .gif, .webp, .heic, etc.) and uploads them
+    to your Flickr account as private photos.
+    """
+    _check_auth()
+    init_db()
+    try:
+        uploader.upload(directory=directory, user=user, dry_run=dry_run)
+    except Exception as e:
+        _log.error("Upload failed: %s", e)
         raise typer.Exit(code=1) from e
 
 
