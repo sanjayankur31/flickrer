@@ -123,23 +123,22 @@ def _fetch_exif_for(photos: list) -> None:
 
 
 def _save_photo(conn, photo) -> None:
-    photo_id = photo.id
-    sizes = getattr(photo, "sizes", {}) or {}
-    original = sizes.get("Original", {})
-    large = sizes.get("Large", {}) or sizes.get("Medium 800", {})
+    _d = photo.__dict__
 
     upsert_photo(
         conn,
-        photo_id=photo_id,
-        title=getattr(photo, "title", None),
-        posted=_int_or_none(getattr(photo, "dateupload", None)),
-        taken=getattr(photo, "datetaken", None),
-        width=_int_or_none(original.get("width")),
-        height=_int_or_none(original.get("height")),
-        media=getattr(photo, "media", None),
-        url_original=original.get("source") or getattr(photo, "url_o", None),
-        url_large=large.get("source") or getattr(photo, "url_l", None),
-        lastupdate=_int_or_none(getattr(photo, "lastupdate", None)),
+        photo_id=photo.id,
+        title=_d.get("title"),
+        posted=_int_or_none(_d.get("dateupload")),
+        taken=_d.get("datetaken"),
+        width=_int_or_none(_d.get("width_o") or _d.get("width_l") or _d.get("o_width")),
+        height=_int_or_none(
+            _d.get("height_o") or _d.get("height_l") or _d.get("o_height")
+        ),
+        media=_d.get("media"),
+        url_original=_d.get("url_o"),
+        url_large=_d.get("url_l"),
+        lastupdate=_int_or_none(_d.get("lastupdate")),
     )
 
 
