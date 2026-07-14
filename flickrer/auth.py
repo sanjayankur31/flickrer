@@ -68,6 +68,7 @@ def ensure_auth() -> bool:
 
     api_key, api_secret = creds
     flickr_api.set_keys(api_key=api_key, api_secret=api_secret)
+    flickr_api.set_rate_limit(3600)
 
     if has_token():
         token_data = json.loads(AUTH_PATH.read_text())
