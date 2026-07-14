@@ -82,8 +82,9 @@ uv pip install -e ".[dev]"
 ruff format . && ruff check .
 uv run pytest tests/ -v
 
+```
+
 ---
 
 This project was built with assistance from [opencode](https://opencode.ai).
 It is intended for personal use only.
-```
