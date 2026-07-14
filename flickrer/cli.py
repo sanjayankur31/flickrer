@@ -62,17 +62,38 @@ def fetch(
         "--before",
         help="Only photos uploaded before this Unix timestamp",
     ),
+    exif: bool = typer.Option(
+        False,
+        "--exif",
+        help="Fetch EXIF data for photos in the DB that are missing it "
+        "(skip the photo list walk, resumes from where you left off)",
+    ),
+    refresh_exif: bool = typer.Option(
+        False,
+        "--refresh-exif",
+        help="Re-fetch EXIF for ALL photos, even if already present "
+        "(useful if metadata was updated on Flickr)",
+    ),
 ) -> None:
-    """Fetch photostream metadata and EXIF into local SQLite database.
+    """Fetch photostream metadata into local SQLite database.
+
+    Without flags: fetches photo list only (fast). Use --exif to
+    fill in EXIF data for photos missing it, or --refresh-exif to
+    force a full re-fetch of all EXIF data.
 
     Requires an authenticated session (run 'flickrer auth' first).
     """
     _check_auth()
     init_db()
     try:
-        fetcher.fetch_photostream(
-            username=user, limit=limit, after=after, before=before
-        )
+        if exif:
+            fetcher.fetch_exif_missing()
+        elif refresh_exif:
+            fetcher.refresh_exif()
+        else:
+            fetcher.fetch_photostream(
+                username=user, limit=limit, after=after, before=before
+            )
     except Exception as e:
         _log.error("Fetch failed: %s", e)
         raise typer.Exit(code=1) from e

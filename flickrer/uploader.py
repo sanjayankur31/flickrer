@@ -20,7 +20,7 @@ from flickrer.db import (
     record_upload,
     update_upload_sync,
 )
-from flickrer.fetcher import fetch_photostream
+from flickrer.fetcher import fetch_exif_missing, fetch_photostream
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +102,7 @@ def upload(directory: str, user: str, dry_run: bool = False) -> None:
             len(all_ids),
         )
         fetch_photostream(username=user, after=max(start_time - 1, 0))
+        fetch_exif_missing()
 
     if interrupted:
         remaining = len(new_files) - len(uploaded_ids) - len(failed)

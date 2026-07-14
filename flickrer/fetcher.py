@@ -3,7 +3,15 @@ import logging
 import flickr_api
 from flickr_api import Walker
 
-from flickrer.db import get_conn, upsert_exif, upsert_photo, init_db
+from flickrer.db import (
+    get_conn,
+    init_db,
+    iter_photos_missing_exif,
+    iter_photos_outdated_exif,
+    set_exif_fetched_at,
+    upsert_exif,
+    upsert_photo,
+)
 
 log = logging.getLogger(__name__)
 
@@ -14,12 +22,12 @@ def fetch_photostream(
     after: int | None = None,
     before: int | None = None,
 ) -> None:
+    """Fetch photo list metadata only (no EXIF)."""
     init_db()
     user = flickr_api.Person.findByUserName(username)
 
-    extras = "url_o,url_l,o_dims,date_upload,date_taken"
+    extras = "url_o,url_l,o_dims,date_upload,date_taken,last_update"
     total = 0
-    exif_total = 0
 
     kwargs: dict = dict(per_page=500, extras=extras)
     if after is not None:
@@ -34,43 +42,7 @@ def fetch_photostream(
     conn = get_conn()
     try:
         for photo in walker:
-            photo_id = photo.id
-
-            sizes = getattr(photo, "sizes", {}) or {}
-            original = sizes.get("Original", {})
-            large = sizes.get("Large", {}) or sizes.get("Medium 800", {})
-
-            width = _int_or_none(original.get("width"))
-            height = _int_or_none(original.get("height"))
-            url_original = original.get("source") or getattr(photo, "url_o", None)
-            url_large = large.get("source") or getattr(photo, "url_l", None)
-            media = getattr(photo, "media", None)
-            posted = _int_or_none(getattr(photo, "dateupload", None))
-            taken = getattr(photo, "datetaken", None)
-            title = getattr(photo, "title", None)
-
-            upsert_photo(
-                conn,
-                photo_id=photo_id,
-                title=title,
-                posted=posted,
-                taken=taken,
-                width=width,
-                height=height,
-                media=media,
-                url_original=url_original,
-                url_large=url_large,
-            )
-
-            try:
-                exifs = photo.getExif()
-                for exif_obj in exifs:
-                    raw = exif_obj.raw if isinstance(exif_obj.raw, str | None) else None
-                    upsert_exif(conn, photo_id, tag=exif_obj.tag, raw=raw)
-                    exif_total += 1
-            except Exception:
-                log.debug("getExif failed for %s", photo_id)
-
+            _save_photo(conn, photo)
             total += 1
             if total % 50 == 0:
                 conn.commit()
@@ -81,10 +53,93 @@ def fetch_photostream(
         conn.commit()
         conn.close()
 
-    log.info(
-        "Done. Fetched %d photos, %d EXIF entries",
-        total,
-        exif_total,
+    log.info("Done. Fetched %d photos.", total)
+
+
+def fetch_exif_missing() -> None:
+    """Fetch EXIF only for photos in the DB that are missing it."""
+    init_db()
+    conn = get_conn()
+    try:
+        photos = list(iter_photos_missing_exif(conn))
+    finally:
+        conn.close()
+
+    if not photos:
+        log.info("All photos already have EXIF data.")
+        return
+
+    log.info("Fetching EXIF for %d photos...", len(photos))
+    _fetch_exif_for(photos)
+
+
+def refresh_exif() -> None:
+    """Re-fetch EXIF for photos whose lastupdate is newer than our last fetch."""
+    init_db()
+    conn = get_conn()
+    try:
+        photos = list(iter_photos_outdated_exif(conn))
+    finally:
+        conn.close()
+
+    if not photos:
+        log.info("No photos with outdated EXIF data.")
+        return
+
+    log.info("Refreshing EXIF for %d outdated photos...", len(photos))
+    _fetch_exif_for(photos)
+
+
+def _fetch_exif_for(photos: list) -> None:
+    total = 0
+    exif_total = 0
+
+    conn = get_conn()
+    try:
+        for row in photos:
+            photo_id = row["id"]
+            try:
+                photo = flickr_api.Photo(id=photo_id)
+                exifs = photo.getExif()
+                for exif_obj in exifs:
+                    raw = exif_obj.raw if isinstance(exif_obj.raw, str | None) else None
+                    upsert_exif(conn, photo_id, tag=exif_obj.tag, raw=raw)
+                    exif_total += 1
+                set_exif_fetched_at(conn, photo_id)
+                total += 1
+            except Exception:
+                log.debug("getExif failed for %s", photo_id)
+
+            if total % 50 == 0:
+                conn.commit()
+                log.info("Fetched EXIF for %d photos so far...", total)
+
+        conn.commit()
+    finally:
+        conn.commit()
+        conn.close()
+
+    log.info("Done. Fetched EXIF for %d photos, %d EXIF entries.", total, exif_total)
+
+
+def _save_photo(conn, photo) -> None:
+    photo_id = photo.id
+    sizes = getattr(photo, "sizes", {}) or {}
+    original = sizes.get("Original", {})
+    large = sizes.get("Large", {}) or sizes.get("Medium 800", {})
+
+    upsert_photo(
+        conn,
+        photo_id=photo_id,
+        title=getattr(photo, "title", None),
+        posted=_int_or_none(getattr(photo, "dateupload", None)),
+        taken=getattr(photo, "datetaken", None),
+        width=_int_or_none(original.get("width")),
+        height=_int_or_none(original.get("height")),
+        media=getattr(photo, "media", None),
+        url_original=original.get("source") or getattr(photo, "url_o", None),
+        url_large=large.get("source") or getattr(photo, "url_l", None),
+        lastupdate=_int_or_none(getattr(photo, "lastupdate", None)),
     )
 
 

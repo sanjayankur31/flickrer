@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS photos (
     content_length INTEGER,
     media          TEXT,
     url_original   TEXT,
-    url_large      TEXT
+    url_large      TEXT,
+    lastupdate     INTEGER,
+    exif_fetched_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS exif (
@@ -68,6 +70,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     existing = {r["name"] for r in conn.execute("PRAGMA table_info(uploads)")}
     if "synced_date" not in existing:
         conn.execute("ALTER TABLE uploads ADD COLUMN synced_date TEXT")
+    photo_cols = {r["name"] for r in conn.execute("PRAGMA table_info(photos)")}
+    if "lastupdate" not in photo_cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN lastupdate INTEGER")
+    if "exif_fetched_at" not in photo_cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN exif_fetched_at INTEGER")
 
 
 # --- photos ---
@@ -84,10 +91,11 @@ def upsert_photo(
     media: str | None = None,
     url_original: str | None = None,
     url_large: str | None = None,
+    lastupdate: int | None = None,
 ) -> None:
     conn.execute(
-        """INSERT INTO photos (id, title, posted, taken, width, height, media, url_original, url_large)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO photos (id, title, posted, taken, width, height, media, url_original, url_large, lastupdate)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
                title=excluded.title,
                posted=excluded.posted,
@@ -96,8 +104,20 @@ def upsert_photo(
                height=excluded.height,
                media=excluded.media,
                url_original=excluded.url_original,
-               url_large=excluded.url_large""",
-        (photo_id, title, posted, taken, width, height, media, url_original, url_large),
+               url_large=excluded.url_large,
+               lastupdate=excluded.lastupdate""",
+        (
+            photo_id,
+            title,
+            posted,
+            taken,
+            width,
+            height,
+            media,
+            url_original,
+            url_large,
+            lastupdate,
+        ),
     )
 
 
@@ -115,6 +135,32 @@ def iter_photos(conn: sqlite3.Connection) -> Generator[sqlite3.Row, None, None]:
 
 def count_photos(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+
+
+def set_exif_fetched_at(conn: sqlite3.Connection, photo_id: str) -> None:
+    conn.execute(
+        "UPDATE photos SET exif_fetched_at = ? WHERE id = ?",
+        (int(time.time()), photo_id),
+    )
+
+
+def iter_photos_missing_exif(
+    conn: sqlite3.Connection,
+) -> Generator[sqlite3.Row, None, None]:
+    yield from conn.execute(
+        "SELECT id FROM photos "
+        "WHERE NOT EXISTS (SELECT 1 FROM exif WHERE photo_id = photos.id)"
+    )
+
+
+def iter_photos_outdated_exif(
+    conn: sqlite3.Connection,
+) -> Generator[sqlite3.Row, None, None]:
+    yield from conn.execute(
+        "SELECT id FROM photos "
+        "WHERE lastupdate IS NOT NULL "
+        "AND (exif_fetched_at IS NULL OR lastupdate > exif_fetched_at)"
+    )
 
 
 # --- exif ---
