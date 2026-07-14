@@ -24,6 +24,11 @@ def _photo(
 
 
 class TestDuplicateReason:
+    # _duplicate_reason checks pairs of photos with the same title for
+    # matching signals: dimensions, upload date proximity, exact taken
+    # date, and file size (from HEAD requests). Returns a combined reason
+    # string, or None if no signals match.
+
     def test_no_match(self, conn):
         a = _photo("1", "sunset", posted=0, width=800)
         b = _photo("2", "beach", posted=7200, width=1024)
@@ -41,7 +46,6 @@ class TestDuplicateReason:
         b = _photo("2", "pic", posted=2000)
         reason = _duplicate_reason(conn, a, b)
         assert reason is not None
-        # 1000s diff is within 1h window
         assert "close upload date" in reason
 
     def test_far_upload_date(self, conn):
@@ -85,6 +89,10 @@ class TestDuplicateReason:
 
 
 class TestFindNoExif:
+    # _find_no_exif flags photos missing camera EXIF tags (Make, Model,
+    # FNumber, ExposureTime, ISO, FocalLength). Non-camera EXIF like
+    # Software is ignored.
+
     def test_no_exif_flagged(self, conn):
         upsert_photo(conn, "p1")
         count = _find_no_exif(conn)
