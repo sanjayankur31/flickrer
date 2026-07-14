@@ -1,5 +1,6 @@
 import json
 import logging
+import warnings
 from pathlib import Path
 
 import flickr_api
@@ -70,7 +71,9 @@ def ensure_auth() -> bool:
 
     if has_token():
         token_data = json.loads(AUTH_PATH.read_text())
-        handler = flickr_api.auth.AuthHandler().fromdict(token_data)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            handler = flickr_api.auth.AuthHandler.fromdict(token_data)
         flickr_api.set_auth_handler(handler)
         return True
 

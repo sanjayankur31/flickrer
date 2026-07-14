@@ -57,6 +57,11 @@ def fetch(
         help="Only photos uploaded after this Unix timestamp "
         "(e.g. 1700000000 for Nov 14 2023; use `date +%s` to get now)",
     ),
+    before: int | None = typer.Option(
+        None,
+        "--before",
+        help="Only photos uploaded before this Unix timestamp",
+    ),
 ) -> None:
     """Fetch photostream metadata and EXIF into local SQLite database.
 
@@ -65,7 +70,9 @@ def fetch(
     _check_auth()
     init_db()
     try:
-        fetcher.fetch_photostream(username=user, limit=limit, after=after)
+        fetcher.fetch_photostream(
+            username=user, limit=limit, after=after, before=before
+        )
     except Exception as e:
         _log.error("Fetch failed: %s", e)
         raise typer.Exit(code=1) from e

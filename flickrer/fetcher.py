@@ -12,6 +12,7 @@ def fetch_photostream(
     username: str,
     limit: int | None = None,
     after: int | None = None,
+    before: int | None = None,
 ) -> None:
     init_db()
     user = flickr_api.Person.findByUserName(username)
@@ -24,6 +25,8 @@ def fetch_photostream(
     kwargs: dict = dict(per_page=500, extras=extras)
     if after is not None:
         kwargs["min_upload_date"] = after
+    if before is not None:
+        kwargs["max_upload_date"] = before
 
     walker = Walker(user.getPhotos, **kwargs)
     if limit is not None:
