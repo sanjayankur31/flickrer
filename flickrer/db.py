@@ -56,6 +56,7 @@ def init_db() -> None:
 
 # --- photos ---
 
+
 def upsert_photo(
     conn: sqlite3.Connection,
     photo_id: str,
@@ -98,7 +99,10 @@ def count_photos(conn: sqlite3.Connection) -> int:
 
 # --- exif ---
 
-def upsert_exif(conn: sqlite3.Connection, photo_id: str, tag: str, raw: str | None) -> None:
+
+def upsert_exif(
+    conn: sqlite3.Connection, photo_id: str, tag: str, raw: str | None
+) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO exif (photo_id, tag, raw) VALUES (?, ?, ?)",
         (photo_id, tag, raw),
@@ -122,6 +126,7 @@ def photo_has_camera_exif(conn: sqlite3.Connection, photo_id: str) -> bool:
 
 # --- flags ---
 
+
 def add_flag(
     conn: sqlite3.Connection,
     photo_id: str,
@@ -143,11 +148,14 @@ def iter_flags(conn: sqlite3.Connection) -> Generator[sqlite3.Row, None, None]:
 
 
 def count_flags(conn: sqlite3.Connection) -> dict[str, int]:
-    rows = conn.execute("SELECT flag_type, COUNT(*) as cnt FROM flags GROUP BY flag_type")
+    rows = conn.execute(
+        "SELECT flag_type, COUNT(*) as cnt FROM flags GROUP BY flag_type"
+    )
     return {r["flag_type"]: r["cnt"] for r in rows}
 
 
 # --- review ---
+
 
 def add_review(conn: sqlite3.Connection, photo_id: str, decision: str) -> None:
     conn.execute(
@@ -157,4 +165,6 @@ def add_review(conn: sqlite3.Connection, photo_id: str, decision: str) -> None:
 
 
 def get_review(conn: sqlite3.Connection, photo_id: str) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM review WHERE photo_id = ?", (photo_id,)).fetchone()
+    return conn.execute(
+        "SELECT * FROM review WHERE photo_id = ?", (photo_id,)
+    ).fetchone()
