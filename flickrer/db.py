@@ -41,10 +41,11 @@ CREATE TABLE IF NOT EXISTS review (
 );
 
 CREATE TABLE IF NOT EXISTS uploads (
-    local_path  TEXT PRIMARY KEY,
-    photo_id    TEXT NOT NULL,
-    mtime       REAL NOT NULL,
-    uploaded_at INTEGER NOT NULL
+    local_path   TEXT PRIMARY KEY,
+    photo_id     TEXT NOT NULL,
+    mtime        REAL NOT NULL,
+    synced_date  TEXT,
+    uploaded_at  INTEGER NOT NULL
 );
 """
 
@@ -60,6 +61,13 @@ def get_conn() -> sqlite3.Connection:
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(_CREATE_TABLES)
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    existing = {r["name"] for r in conn.execute("PRAGMA table_info(uploads)")}
+    if "synced_date" not in existing:
+        conn.execute("ALTER TABLE uploads ADD COLUMN synced_date TEXT")
 
 
 # --- photos ---
@@ -194,11 +202,16 @@ def get_review(conn: sqlite3.Connection, photo_id: str) -> sqlite3.Row | None:
 
 
 def record_upload(
-    conn: sqlite3.Connection, local_path: str, photo_id: str, mtime: float
+    conn: sqlite3.Connection,
+    local_path: str,
+    photo_id: str,
+    mtime: float,
+    synced_date: str | None = None,
 ) -> None:
     conn.execute(
-        "INSERT OR REPLACE INTO uploads (local_path, photo_id, mtime, uploaded_at) VALUES (?, ?, ?, ?)",
-        (local_path, photo_id, mtime, int(time.time())),
+        "INSERT OR REPLACE INTO uploads (local_path, photo_id, mtime, synced_date, uploaded_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (local_path, photo_id, mtime, synced_date, int(time.time())),
     )
 
 
@@ -208,3 +221,34 @@ def is_uploaded(conn: sqlite3.Connection, local_path: str, mtime: float) -> bool
         (local_path, mtime),
     ).fetchone()
     return row is not None
+
+
+def is_uploaded_any(conn: sqlite3.Connection, local_path: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM uploads WHERE local_path = ?", (local_path,)
+    ).fetchone()
+    return row is not None
+
+
+def get_upload(conn: sqlite3.Connection, local_path: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM uploads WHERE local_path = ?", (local_path,)
+    ).fetchone()
+
+
+def update_upload_sync(
+    conn: sqlite3.Connection,
+    local_path: str,
+    synced_date: str | None,
+    mtime: float | None = None,
+) -> None:
+    if mtime is not None:
+        conn.execute(
+            "UPDATE uploads SET synced_date = ?, mtime = ? WHERE local_path = ?",
+            (synced_date, mtime, local_path),
+        )
+    else:
+        conn.execute(
+            "UPDATE uploads SET synced_date = ? WHERE local_path = ?",
+            (synced_date, local_path),
+        )

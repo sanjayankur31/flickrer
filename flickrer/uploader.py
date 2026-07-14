@@ -14,7 +14,12 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from flickrer.db import get_conn, is_uploaded, record_upload
+from flickrer.db import (
+    get_conn,
+    is_uploaded_any,
+    record_upload,
+    update_upload_sync,
+)
 from flickrer.fetcher import fetch_photostream
 
 log = logging.getLogger(__name__)
@@ -47,27 +52,26 @@ def upload(directory: str, user: str, dry_run: bool = False) -> None:
 
     conn = get_conn()
     try:
-        new_files, existing = _classify_files(conn, all_files)
+        new_files, known_files = _classify_files(conn, all_files)
     finally:
         conn.close()
 
-    if not new_files and not existing:
+    if not new_files and not known_files:
         log.info("No files found in directory.")
         return
 
-    skipped = len(existing)
     log.info(
-        "Found %d image files (%d new, %d existing)",
+        "Found %d image files (%d new, %d known)",
         len(all_files),
         len(new_files),
-        skipped,
+        len(known_files),
     )
 
     if dry_run:
         log.info(
-            "[DRY RUN] Would upload %d files, update %d existing",
+            "[DRY RUN] Would upload %d files, check %d existing",
             len(new_files),
-            len(existing),
+            len(known_files),
         )
         return
 
@@ -76,14 +80,15 @@ def upload(directory: str, user: str, dry_run: bool = False) -> None:
     updated_ids: list[str] = []
     start_time = int(time.time())
     interrupted = False
+    skipped = 0
 
     conn = get_conn()
     try:
         if new_files:
-            _do_uploads(conn, new_files, uploaded_ids, failed, interrupted, start_time)
+            _do_uploads(conn, new_files, uploaded_ids, failed, interrupted)
 
-        if existing:
-            _do_updates(conn, existing, updated_ids, interrupted)
+        if known_files:
+            skipped = _do_updates(conn, known_files, updated_ids, interrupted)
 
     except KeyboardInterrupt:
         interrupted = True
@@ -118,7 +123,7 @@ def upload(directory: str, user: str, dry_run: bool = False) -> None:
         )
 
 
-def _do_uploads(conn, paths, uploaded_ids, failed, interrupted, start_time):
+def _do_uploads(conn, paths, uploaded_ids, failed, interrupted):
     progress = Progress(
         TextColumn("{task.description}"),
         BarColumn(),
@@ -148,7 +153,13 @@ def _do_uploads(conn, paths, uploaded_ids, failed, interrupted, start_time):
             try:
                 photo = flickr_api.upload(**kwargs)
                 uploaded_ids.append(photo.id)
-                record_upload(conn, str(path), photo.id, path.stat().st_mtime)
+                record_upload(
+                    conn,
+                    str(path),
+                    photo.id,
+                    path.stat().st_mtime,
+                    synced_date=date_taken,
+                )
                 conn.commit()
                 progress.update(task, advance=1)
             except KeyboardInterrupt:
@@ -159,7 +170,7 @@ def _do_uploads(conn, paths, uploaded_ids, failed, interrupted, start_time):
                 progress.update(task, advance=1)
 
 
-def _do_updates(conn, paths, updated_ids, interrupted):
+def _do_updates(conn, paths, updated_ids, interrupted) -> int:
     progress = Progress(
         TextColumn("{task.description}"),
         BarColumn(),
@@ -167,36 +178,59 @@ def _do_updates(conn, paths, updated_ids, interrupted):
         TimeRemainingColumn(),
     )
 
-    lookups = {
-        r["local_path"]: r["photo_id"]
-        for r in conn.execute("SELECT local_path, photo_id FROM uploads").fetchall()
+    rows = {
+        r["local_path"]: r
+        for r in conn.execute(
+            "SELECT local_path, photo_id, mtime, synced_date FROM uploads"
+        ).fetchall()
     }
 
+    skipped = 0
+
     with progress:
-        task = progress.add_task("Updating dates...", total=len(paths))
+        task = progress.add_task("Checking...", total=len(paths))
 
         for path in paths:
             if interrupted:
                 break
 
-            photo_id = lookups.get(str(path))
-            if not photo_id:
-                log.debug("No photo_id found for %s, skipping", path.name)
+            row = rows.get(str(path))
+            if not row:
                 progress.update(task, advance=1)
                 continue
 
             date_taken = _guess_taken(path)
+            mtime = path.stat().st_mtime
+            mtime_changed = mtime != row["mtime"]
+
+            if mtime_changed:
+                progress.update(task, description=f"Mtime changed: {path.name}")
+
             if not date_taken:
+                if mtime_changed:
+                    update_upload_sync(conn, str(path), None, mtime=mtime)
+                    conn.commit()
+                progress.update(task, advance=1)
+                continue
+
+            if date_taken == row["synced_date"] and not mtime_changed:
+                skipped += 1
                 progress.update(task, advance=1)
                 continue
 
             try:
-                flickr_api.Photo(id=photo_id).setDates(date_taken=date_taken)
-                updated_ids.append(photo_id)
+                flickr_api.Photo(id=row["photo_id"]).setDates(date_taken=date_taken)
+                updated_ids.append(row["photo_id"])
+                update_upload_sync(
+                    conn, str(path), date_taken, mtime=mtime if mtime_changed else None
+                )
+                conn.commit()
                 progress.update(task, description=f"Updated {path.name}")
             except Exception as e:
                 log.warning("Failed to update date for %s: %s", path.name, e)
                 progress.update(task, advance=1)
+
+    return skipped
 
 
 def _guess_taken(path: Path) -> str | None:
@@ -262,11 +296,10 @@ def _walk_images(directory: Path) -> list[Path]:
 
 def _classify_files(conn, files: list[Path]):
     new_files = []
-    existing = []
+    known = []
     for path in files:
-        mtime = path.stat().st_mtime
-        if is_uploaded(conn, str(path), mtime):
-            existing.append(path)
+        if is_uploaded_any(conn, str(path)):
+            known.append(path)
         else:
             new_files.append(path)
-    return new_files, existing
+    return new_files, known
