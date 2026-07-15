@@ -89,14 +89,15 @@ class TestDuplicateReason:
 
 
 class TestFindNoExif:
-    # _find_no_exif flags photos missing camera EXIF tags (Make, Model,
-    # FNumber, ExposureTime, ISO, FocalLength). Non-camera EXIF like
-    # Software is ignored.
+    # _find_no_exif returns (no_exif_count, no_camera_count):
+    #   no_exif      = zero EXIF rows at all
+    #   no_camera    = has EXIF rows but none are camera tags
 
     def test_no_exif_flagged(self, conn):
         upsert_photo(conn, "p1")
-        count = _find_no_exif(conn)
-        assert count == 1
+        no_exif, no_camera = _find_no_exif(conn)
+        assert no_exif == 1
+        assert no_camera == 0
         flags = conn.execute(
             "SELECT * FROM flags WHERE flag_type = 'no_exif'"
         ).fetchall()
@@ -107,18 +108,25 @@ class TestFindNoExif:
         upsert_photo(conn, "p1")
         upsert_exif(conn, "p1", "Make", "Canon")
         upsert_exif(conn, "p1", "ISO", "400")
-        count = _find_no_exif(conn)
-        assert count == 0
+        no_exif, no_camera = _find_no_exif(conn)
+        assert no_exif == 0
+        assert no_camera == 0
 
     def test_non_camera_exif_flagged(self, conn):
         upsert_photo(conn, "p1")
         upsert_exif(conn, "p1", "Software", "Lightroom")
-        count = _find_no_exif(conn)
-        assert count == 1
+        no_exif, no_camera = _find_no_exif(conn)
+        assert no_exif == 0
+        assert no_camera == 1
+        flags = conn.execute(
+            "SELECT * FROM flags WHERE flag_type = 'no_camera_exif'"
+        ).fetchall()
+        assert len(flags) == 1
 
     def test_mixed_photos(self, conn):
         upsert_photo(conn, "p1")
         upsert_exif(conn, "p1", "Make", "Nikon")
         upsert_photo(conn, "p2")
-        count = _find_no_exif(conn)
-        assert count == 1
+        no_exif, no_camera = _find_no_exif(conn)
+        assert no_exif == 1
+        assert no_camera == 0

@@ -190,6 +190,13 @@ def photo_has_camera_exif(conn: sqlite3.Connection, photo_id: str) -> bool:
     return rows.fetchone() is not None
 
 
+def photo_has_any_exif(conn: sqlite3.Connection, photo_id: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM exif WHERE photo_id = ? LIMIT 1", (photo_id,)
+    ).fetchone()
+    return row is not None
+
+
 # --- flags ---
 
 

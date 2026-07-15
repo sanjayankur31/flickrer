@@ -116,10 +116,10 @@ class TestFlags:
         upsert_photo(conn, "p2")
         add_flag(conn, "p1", "duplicate", "dup", related_photo_id="p2")
         add_flag(conn, "p2", "duplicate", "dup", related_photo_id="p1")
-        add_flag(conn, "p1", "no_exif", "no exif")
+        add_flag(conn, "p1", "no_camera_exif", "no camera tags")
         counts = count_flags(conn)
         assert counts["duplicate"] == 2
-        assert counts["no_exif"] == 1
+        assert counts["no_camera_exif"] == 1
 
 
 class TestReview:

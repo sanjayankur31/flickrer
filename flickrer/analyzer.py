@@ -5,6 +5,7 @@ from collections import defaultdict
 from flickrer.db import (
     add_flag,
     get_conn,
+    photo_has_any_exif,
     photo_has_camera_exif,
     set_content_length,
 )
@@ -21,8 +22,11 @@ def analyze() -> None:
         dups = _find_duplicates(conn)
         log.info("Found %d duplicate pairs", dups)
 
-        noexif = _find_no_exif(conn)
-        log.info("Found %d no-EXIF photos", noexif)
+        no_exif, no_camera = _find_no_exif(conn)
+        if no_exif:
+            log.info("Found %d photos with no EXIF at all", no_exif)
+        if no_camera:
+            log.info("Found %d photos with EXIF but no camera tags", no_camera)
     finally:
         conn.close()
 
@@ -137,19 +141,31 @@ def _duplicate_reason(conn, a: dict, b: dict) -> str | None:
     return ", ".join(reasons)
 
 
-def _find_no_exif(conn) -> int:
+def _find_no_exif(conn) -> tuple[int, int]:
     rows = list(conn.execute("SELECT id, title FROM photos"))
-    count = 0
+    no_exif_count = 0
+    no_camera_count = 0
 
     for row in rows:
-        if not photo_has_camera_exif(conn, row["id"]):
+        if photo_has_camera_exif(conn, row["id"]):
+            continue
+
+        if not photo_has_any_exif(conn, row["id"]):
             add_flag(
                 conn,
                 photo_id=row["id"],
                 flag_type="no_exif",
-                reason="No camera EXIF data (could be meme, screenshot, or download)",
+                reason="No EXIF data at all",
             )
-            count += 1
+            no_exif_count += 1
+        else:
+            add_flag(
+                conn,
+                photo_id=row["id"],
+                flag_type="no_camera_exif",
+                reason="Has EXIF but missing camera tags (Make, Model, FNumber, etc.)",
+            )
+            no_camera_count += 1
 
     conn.commit()
-    return count
+    return no_exif_count, no_camera_count
