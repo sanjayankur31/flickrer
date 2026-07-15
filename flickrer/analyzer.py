@@ -45,6 +45,7 @@ def _fetch_content_length(url: str | None) -> int | None:
 
 
 def _find_duplicates(conn) -> int:
+    conn.execute("DELETE FROM flags WHERE flag_type = 'duplicate'")
     grouped: dict[str, list] = defaultdict(list)
 
     for row in conn.execute(
@@ -142,6 +143,7 @@ def _duplicate_reason(conn, a: dict, b: dict) -> str | None:
 
 
 def _find_no_exif(conn) -> tuple[int, int]:
+    conn.execute("DELETE FROM flags WHERE flag_type IN ('no_exif', 'no_camera_exif')")
     rows = list(conn.execute("SELECT id, title FROM photos"))
     no_exif_count = 0
     no_camera_count = 0
